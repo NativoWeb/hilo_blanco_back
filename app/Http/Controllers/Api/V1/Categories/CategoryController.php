@@ -8,8 +8,10 @@ use App\Http\Requests\Categories\UpdateCategoryRequest;
 use App\Http\Resources\Categories\CategoryCollection;
 use App\Http\Resources\Categories\CategoryResource;
 use App\Models\Category;
+use App\Services\ImageService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class CategoryController extends Controller
@@ -62,6 +64,44 @@ class CategoryController extends Controller
         $category->update($data);
 
         return $this->successResponse(new CategoryResource($category->fresh()), 'Categoría actualizada correctamente.');
+    }
+
+    public function uploadImage(Request $request, Category $category): JsonResponse
+    {
+        $this->authorize('update', $category);
+
+        $request->validate([
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $imageService = app(ImageService::class);
+
+        // Eliminar imagen anterior si existe
+        if ($category->image) {
+            $imageService->delete($category->image);
+        }
+
+        $result = $imageService->process($request->file('image'), 'categories');
+        $category->update(['image' => $result['path']]);
+
+        return $this->successResponse(
+            new CategoryResource($category->fresh()),
+            'Imagen de categoría actualizada.',
+        );
+    }
+
+    public function destroyImage(Category $category): JsonResponse
+    {
+        $this->authorize('update', $category);
+
+        if (! $category->image) {
+            return $this->errorResponse('La categoría no tiene imagen.', 404);
+        }
+
+        app(ImageService::class)->delete($category->image);
+        $category->update(['image' => null]);
+
+        return $this->successResponse(null, 'Imagen de categoría eliminada.');
     }
 
     public function destroy(Category $category): JsonResponse

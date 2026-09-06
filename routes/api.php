@@ -61,8 +61,12 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
             ->only(['store', 'update']);
 
         Route::post('products/{product}/images', [ProductController::class, 'uploadImages']);
+        Route::put('products/{product}/images/{image}', [ProductController::class, 'updateImage']);
         Route::delete('products/{product}/images/{image}', [ProductController::class, 'destroyImage']);
         Route::patch('products/{product}/images/{image}/cover', [ProductController::class, 'setCover']);
+
+        Route::post('categories/{category}/image', [CategoryController::class, 'uploadImage']);
+        Route::delete('categories/{category}/image', [CategoryController::class, 'destroyImage']);
 
         Route::get('settings', [SettingController::class, 'index']);
     });

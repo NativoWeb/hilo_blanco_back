@@ -10,11 +10,11 @@ use App\Http\Resources\Products\ProductImageResource;
 use App\Http\Resources\Products\ProductResource;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Services\ImageService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ProductController extends Controller
@@ -103,14 +103,15 @@ class ProductController extends Controller
             'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
+        $imageService = app(ImageService::class);
         $uploaded = [];
         $hasCover = $product->images()->where('is_cover', 1)->exists();
 
         foreach ($request->file('images') as $index => $file) {
-            $path = $file->store('products', 'public');
+            $result = $imageService->process($file, 'products');
             $image = ProductImage::create([
                 'product_id' => $product->id,
-                'path' => $path,
+                'path' => $result['path'],
                 'is_cover' => ! $hasCover && $index === 0 ? 1 : 0,
                 'sort_order' => $product->images()->max('sort_order') + $index + 1,
             ]);
@@ -121,6 +122,24 @@ class ProductController extends Controller
         return $this->successResponse($uploaded, 'Imágenes subidas correctamente.', 201);
     }
 
+    public function updateImage(Request $request, Product $product, ProductImage $image): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        if ($image->product_id !== $product->id) {
+            return $this->errorResponse('Imagen no pertenece a este producto.', 403);
+        }
+
+        $validated = $request->validate([
+            'alt_text' => ['nullable', 'string', 'max:150'],
+            'sort_order' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $image->update($validated);
+
+        return $this->successResponse(new ProductImageResource($image->fresh()), 'Imagen actualizada.');
+    }
+
     public function destroyImage(Product $product, ProductImage $image): JsonResponse
     {
         $this->authorize('update', $product);
@@ -129,7 +148,7 @@ class ProductController extends Controller
             return $this->errorResponse('Imagen no pertenece a este producto.', 403);
         }
 
-        Storage::disk('public')->delete($image->path);
+        app(ImageService::class)->delete($image->path);
         $wasCover = $image->is_cover;
         $image->delete();
 
