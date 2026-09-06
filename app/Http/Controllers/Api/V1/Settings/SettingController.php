@@ -58,13 +58,20 @@ class SettingController extends Controller
         $isVideo = str_starts_with($file->getMimeType(), 'video/');
 
         if ($isVideo) {
-            // Videos van directo a Cloudinary con resource_type video
-            if (! empty(config('cloudinary.cloud_url'))) {
-                $result = \CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary::uploadVideo($file->getRealPath(), [
+            if (! empty(config('filesystems.disks.cloudinary.cloud'))) {
+                $cloudinary = new \Cloudinary\Cloudinary([
+                    'cloud' => [
+                        'cloud_name' => config('filesystems.disks.cloudinary.cloud'),
+                        'api_key' => config('filesystems.disks.cloudinary.key'),
+                        'api_secret' => config('filesystems.disks.cloudinary.secret'),
+                    ],
+                    'url' => ['secure' => true],
+                ]);
+                $result = $cloudinary->uploadApi()->upload($file->getRealPath(), [
                     'folder' => 'hiloblanco/media',
                     'resource_type' => 'video',
                 ]);
-                $url = $result->getSecurePath();
+                $url = $result['secure_url'];
             } else {
                 $url = asset('storage/'.$file->store('media', 'public'));
             }

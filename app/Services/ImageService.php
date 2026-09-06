@@ -2,15 +2,16 @@
 
 namespace App\Services;
 
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Cloudinary\Api\Upload\UploadApi;
+use Cloudinary\Cloudinary;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ImageService
 {
     /**
      * Sube imagen a Cloudinary (CDN) o a storage local según configuración.
-     * Retorna ['path' => 'url_o_path', 'public_id' => 'cloudinary_id_o_null'].
      */
     public function process(UploadedFile $file, string $directory = 'products'): array
     {
@@ -26,16 +27,15 @@ class ImageService
      */
     public function delete(string $path): void
     {
-        if ($this->useCloudinary() && str_starts_with($path, 'http')) {
+        if (str_starts_with($path, 'http') && str_contains($path, 'cloudinary')) {
             $publicId = $this->extractPublicId($path);
-            if ($publicId) {
-                Cloudinary::destroy($publicId);
+            if ($publicId && $this->useCloudinary()) {
+                $this->cloudinaryClient()->uploadApi()->destroy($publicId);
             }
 
             return;
         }
 
-        // Local: eliminar original + thumbnail
         Storage::disk('public')->delete($path);
         $dir = dirname($path);
         $file = basename($path);
@@ -44,8 +44,6 @@ class ImageService
 
     /**
      * Genera URL del thumbnail.
-     * Cloudinary: transforma vía URL (w_400, calidad auto, formato auto).
-     * Local: convención {dir}/thumbs/{file}.
      */
     public static function thumbnailUrl(string $path): string
     {
@@ -61,8 +59,6 @@ class ImageService
 
     /**
      * Genera la URL pública de una imagen.
-     * Si es URL completa (Cloudinary), la devuelve tal cual.
-     * Si es path relativo (local), genera con asset().
      */
     public static function publicUrl(string $path): string
     {
@@ -75,31 +71,40 @@ class ImageService
 
     private function useCloudinary(): bool
     {
-        return ! empty(config('cloudinary.cloud_url'));
+        return ! empty(config('filesystems.disks.cloudinary.cloud'));
+    }
+
+    private function cloudinaryClient(): Cloudinary
+    {
+        return new Cloudinary([
+            'cloud' => [
+                'cloud_name' => config('filesystems.disks.cloudinary.cloud'),
+                'api_key' => config('filesystems.disks.cloudinary.key'),
+                'api_secret' => config('filesystems.disks.cloudinary.secret'),
+            ],
+            'url' => ['secure' => true],
+        ]);
     }
 
     private function processCloudinary(UploadedFile $file, string $directory): array
     {
-        $result = Cloudinary::upload($file->getRealPath(), [
+        $result = $this->cloudinaryClient()->uploadApi()->upload($file->getRealPath(), [
             'folder' => 'hiloblanco/'.$directory,
-            'transformation' => [
-                'quality' => 'auto',
-                'fetch_format' => 'auto',
-            ],
+            'quality' => 'auto',
+            'fetch_format' => 'auto',
         ]);
 
         return [
-            'path' => $result->getSecurePath(),
-            'public_id' => $result->getPublicId(),
+            'path' => $result['secure_url'],
+            'public_id' => $result['public_id'],
         ];
     }
 
     private function processLocal(UploadedFile $file, string $directory): array
     {
         $extension = strtolower($file->getClientOriginalExtension()) ?: 'jpg';
-        $filename = \Illuminate\Support\Str::random(40).'.'.$extension;
+        $filename = Str::random(40).'.'.$extension;
 
-        // Redimensionar si intervention/image está disponible
         if (class_exists(\Intervention\Image\ImageManager::class)) {
             $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
 
@@ -116,7 +121,6 @@ class ImageService
             };
             Storage::disk('public')->put($path, (string) $encoded);
 
-            // Thumbnail
             $thumb = $manager->read($file->getPathname());
             $thumb->scaleDown(width: 400);
             $thumbEncoded = match ($extension) {
@@ -137,7 +141,6 @@ class ImageService
 
     private function extractPublicId(string $url): ?string
     {
-        // URL: https://res.cloudinary.com/{cloud}/image/upload/v123/hiloblanco/products/abc.jpg
         if (preg_match('#/upload/(?:v\d+/)?(.+)\.\w+$#', $url, $matches)) {
             return $matches[1];
         }
