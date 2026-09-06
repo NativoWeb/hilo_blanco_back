@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Auth\TokenController;
 use App\Http\Controllers\Api\V1\Categories\CategoryController;
 use App\Http\Controllers\Api\V1\Products\ProductController;
 use App\Http\Controllers\Api\V1\Settings\SettingController;
+use App\Http\Controllers\Api\V1\TrunkShows\TrunkShowController;
 use App\Http\Controllers\Api\V1\Users\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -25,6 +26,10 @@ Route::prefix('v1')->group(function () {
     Route::get('categories/{slug}', [CategoryController::class, 'show']);
 
     Route::get('settings/public', [SettingController::class, 'public']);
+
+    // Trunk Shows — listado público
+    Route::get('trunk-shows', [TrunkShowController::class, 'index']);
+    Route::get('trunk-shows/{slug}', [TrunkShowController::class, 'show']);
 
     // Citas — POST público (cualquier visitante puede solicitar cita)
     Route::post('appointments', [AppointmentController::class, 'store'])
@@ -69,6 +74,13 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
         Route::delete('categories/{category}/image', [CategoryController::class, 'destroyImage']);
 
         Route::get('settings', [SettingController::class, 'index']);
+
+        // Trunk Shows — gestión admin
+        Route::post('trunk-shows', [TrunkShowController::class, 'store']);
+        Route::put('trunk-shows/{trunkShow}', [TrunkShowController::class, 'update']);
+        Route::delete('trunk-shows/{trunkShow}', [TrunkShowController::class, 'destroy']);
+        Route::post('trunk-shows/{trunkShow}/image', [TrunkShowController::class, 'uploadImage']);
+        Route::delete('trunk-shows/{trunkShow}/image', [TrunkShowController::class, 'destroyImage']);
     });
 
     /*
@@ -88,6 +100,7 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
 
         // Ruta estática ANTES de la paramétrica (buena práctica defensiva)
         Route::patch('settings/bulk', [SettingController::class, 'bulk']);
+        Route::post('settings/{key}/media', [SettingController::class, 'uploadMedia']);
         Route::put('settings/{key}', [SettingController::class, 'update']);
     });
 });

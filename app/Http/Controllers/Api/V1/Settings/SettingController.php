@@ -7,8 +7,10 @@ use App\Http\Requests\Settings\BulkSettingRequest;
 use App\Http\Requests\Settings\UpdateSettingRequest;
 use App\Http\Resources\Settings\SettingResource;
 use App\Models\Setting;
+use App\Services\ImageService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class SettingController extends Controller
@@ -40,6 +42,49 @@ class SettingController extends Controller
         $setting->update($request->validated());
 
         return $this->successResponse(new SettingResource($setting->fresh()), 'Configuración actualizada.');
+    }
+
+    public function uploadMedia(Request $request, string $key): JsonResponse
+    {
+        $setting = Setting::where('key', $key)->firstOrFail();
+
+        $this->authorize('update', $setting);
+
+        $request->validate([
+            'media' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,mp4,mov,webm', 'max:51200'],
+        ]);
+
+        $file = $request->file('media');
+        $isVideo = str_starts_with($file->getMimeType(), 'video/');
+
+        if ($isVideo) {
+            // Videos van directo a Cloudinary con resource_type video
+            if (! empty(config('cloudinary.cloud_url'))) {
+                $result = \CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary::uploadVideo($file->getRealPath(), [
+                    'folder' => 'hiloblanco/media',
+                    'resource_type' => 'video',
+                ]);
+                $url = $result->getSecurePath();
+            } else {
+                $url = asset('storage/'.$file->store('media', 'public'));
+            }
+        } else {
+            $imageService = app(ImageService::class);
+            $result = $imageService->process($file, 'media');
+            $url = str_starts_with($result['path'], 'http')
+                ? $result['path']
+                : asset('storage/'.$result['path']);
+        }
+
+        // Eliminar media anterior si existía
+        $oldValue = $setting->value;
+        if ($oldValue && str_starts_with($oldValue, 'http') && str_contains($oldValue, 'cloudinary')) {
+            app(ImageService::class)->delete($oldValue);
+        }
+
+        $setting->update(['value' => $url]);
+
+        return $this->successResponse(new SettingResource($setting->fresh()), 'Media actualizado correctamente.');
     }
 
     public function bulk(BulkSettingRequest $request): JsonResponse
