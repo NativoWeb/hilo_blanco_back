@@ -90,8 +90,6 @@ class ImageService
     {
         $result = $this->cloudinaryClient()->uploadApi()->upload($file->getRealPath(), [
             'folder' => 'hiloblanco/'.$directory,
-            'quality' => 'auto',
-            'fetch_format' => 'auto',
         ]);
 
         return [
