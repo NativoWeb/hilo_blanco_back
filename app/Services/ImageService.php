@@ -76,14 +76,7 @@ class ImageService
 
     private function cloudinaryClient(): Cloudinary
     {
-        return new Cloudinary([
-            'cloud' => [
-                'cloud_name' => config('filesystems.disks.cloudinary.cloud'),
-                'api_key' => config('filesystems.disks.cloudinary.key'),
-                'api_secret' => config('filesystems.disks.cloudinary.secret'),
-            ],
-            'url' => ['secure' => true],
-        ]);
+        return new Cloudinary(config('filesystems.disks.cloudinary.url'));
     }
 
     private function processCloudinary(UploadedFile $file, string $directory): array

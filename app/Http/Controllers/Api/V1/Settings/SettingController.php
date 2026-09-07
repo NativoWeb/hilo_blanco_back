@@ -58,15 +58,8 @@ class SettingController extends Controller
         $isVideo = str_starts_with($file->getMimeType(), 'video/');
 
         if ($isVideo) {
-            if (! empty(config('filesystems.disks.cloudinary.cloud'))) {
-                $cloudinary = new \Cloudinary\Cloudinary([
-                    'cloud' => [
-                        'cloud_name' => config('filesystems.disks.cloudinary.cloud'),
-                        'api_key' => config('filesystems.disks.cloudinary.key'),
-                        'api_secret' => config('filesystems.disks.cloudinary.secret'),
-                    ],
-                    'url' => ['secure' => true],
-                ]);
+            if (! empty(config('filesystems.disks.cloudinary.url'))) {
+                $cloudinary = new \Cloudinary\Cloudinary(config('filesystems.disks.cloudinary.url'));
                 $result = $cloudinary->uploadApi()->upload($file->getRealPath(), [
                     'folder' => 'hiloblanco/media',
                     'resource_type' => 'video',
